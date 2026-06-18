@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "khmer-nlp-kcc"
+version = "0.2.3"
+description = "Khmer word segmentation, POS tagging, NER, and more — powered by a custom Khmer language model"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Rina Buoy", email = "t22041d@omu.ac.jp" }]
+keywords = ["khmer", "nlp", "segmentation", "pos", "ner", "cambodian"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = [
+    "torch>=2.0",
+    "transformers>=4.35",
+    "huggingface_hub>=0.20",
+    "sentencepiece>=0.1.99",
+]
+
+[project.urls]
+Homepage = "https://github.com/rinabuoy/khmer-nlp"
+Repository = "https://github.com/rinabuoy/khmer-nlp"
+
+[tool.setuptools.packages.find]
+include = ["khmer_nlp*"]
