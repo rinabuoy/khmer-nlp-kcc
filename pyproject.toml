@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "khmer-nlp-kcc"
-version = "0.2.3"
+version = "0.2.4"
 description = "Khmer word segmentation, POS tagging, NER, and more — powered by a custom Khmer language model"
 readme = "README.md"
 license = { text = "MIT" }
