@@ -32,8 +32,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/rinabuoy/khmer-nlp"
-Repository = "https://github.com/rinabuoy/khmer-nlp"
+Homepage = "https://github.com/rinabuoy/khmer-nlp-kcc"
+Repository = "https://github.com/rinabuoy/khmer-nlp-kcc"
 
 [tool.setuptools.packages.find]
 include = ["khmer_nlp*"]
