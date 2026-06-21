@@ -44,92 +44,92 @@ _PF_DIM = 192 * 4
 _DROPOUT = 0.1
 
 
-# ── Model layers ───────────────────────────────────────────────────────────────
+# ── Model layers (attribute names must match the saved checkpoint exactly) ──────
 
 class _MHA(nn.Module):
     def __init__(self, hid, heads, drop, device):
         super().__init__()
-        self.heads = heads
+        self.n_heads = heads
         self.head_dim = hid // heads
         self.fc_q = nn.Linear(hid, hid)
         self.fc_k = nn.Linear(hid, hid)
         self.fc_v = nn.Linear(hid, hid)
         self.fc_o = nn.Linear(hid, hid)
-        self.drop = nn.Dropout(drop)
+        self.dropout = nn.Dropout(drop)
         self.scale = torch.sqrt(torch.FloatTensor([self.head_dim])).to(device)
 
     def forward(self, q, k, v, mask=None):
         bs = q.shape[0]
-        Q = self.fc_q(q).view(bs, -1, self.heads, self.head_dim).permute(0, 2, 1, 3)
-        K = self.fc_k(k).view(bs, -1, self.heads, self.head_dim).permute(0, 2, 1, 3)
-        V = self.fc_v(v).view(bs, -1, self.heads, self.head_dim).permute(0, 2, 1, 3)
+        Q = self.fc_q(q).view(bs, -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
+        K = self.fc_k(k).view(bs, -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
+        V = self.fc_v(v).view(bs, -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
         e = torch.matmul(Q, K.permute(0, 1, 3, 2)) / self.scale
         if mask is not None:
             e = e.masked_fill(mask == 0, -1e10)
         a = torch.softmax(e, dim=-1)
-        x = torch.matmul(self.drop(a), V).permute(0, 2, 1, 3).contiguous()
-        x = x.view(bs, -1, self.heads * self.head_dim)
+        x = torch.matmul(self.dropout(a), V).permute(0, 2, 1, 3).contiguous()
+        x = x.view(bs, -1, self.n_heads * self.head_dim)
         return self.fc_o(x), a
 
 
 class _FF(nn.Module):
     def __init__(self, hid, pf, drop):
         super().__init__()
-        self.fc1 = nn.Linear(hid, pf)
-        self.fc2 = nn.Linear(pf, hid)
-        self.drop = nn.Dropout(drop)
+        self.fc_1 = nn.Linear(hid, pf)
+        self.fc_2 = nn.Linear(pf, hid)
+        self.dropout = nn.Dropout(drop)
 
     def forward(self, x):
-        return self.fc2(self.drop(torch.relu(self.fc1(x))))
+        return self.fc_2(self.dropout(torch.relu(self.fc_1(x))))
 
 
 class _EncLayer(nn.Module):
     def __init__(self, hid, heads, pf, drop, device):
         super().__init__()
-        self.norm1 = nn.LayerNorm(hid)
-        self.norm2 = nn.LayerNorm(hid)
-        self.attn = _MHA(hid, heads, drop, device)
-        self.ff = _FF(hid, pf, drop)
-        self.drop = nn.Dropout(drop)
+        self.self_attn_layer_norm = nn.LayerNorm(hid)
+        self.ff_layer_norm = nn.LayerNorm(hid)
+        self.self_attention = _MHA(hid, heads, drop, device)
+        self.positionwise_feedforward = _FF(hid, pf, drop)
+        self.dropout = nn.Dropout(drop)
 
     def forward(self, src, mask):
-        _s, _ = self.attn(src, src, src, mask)
-        src = self.norm1(src + self.drop(_s))
-        return self.norm2(src + self.drop(self.ff(src)))
+        _s, _ = self.self_attention(src, src, src, mask)
+        src = self.self_attn_layer_norm(src + self.dropout(_s))
+        return self.ff_layer_norm(src + self.dropout(self.positionwise_feedforward(src)))
 
 
 class _DecLayer(nn.Module):
     def __init__(self, hid, heads, pf, drop, device):
         super().__init__()
-        self.norm1 = nn.LayerNorm(hid)
-        self.norm2 = nn.LayerNorm(hid)
-        self.norm3 = nn.LayerNorm(hid)
-        self.self_attn = _MHA(hid, heads, drop, device)
-        self.enc_attn = _MHA(hid, heads, drop, device)
-        self.ff = _FF(hid, pf, drop)
-        self.drop = nn.Dropout(drop)
+        self.self_attn_layer_norm = nn.LayerNorm(hid)
+        self.enc_attn_layer_norm = nn.LayerNorm(hid)
+        self.ff_layer_norm = nn.LayerNorm(hid)
+        self.self_attention = _MHA(hid, heads, drop, device)
+        self.encoder_attention = _MHA(hid, heads, drop, device)
+        self.positionwise_feedforward = _FF(hid, pf, drop)
+        self.dropout = nn.Dropout(drop)
 
     def forward(self, trg, enc, trg_mask, src_mask):
-        _t, _ = self.self_attn(trg, trg, trg, trg_mask)
-        trg = self.norm1(trg + self.drop(_t))
-        _t, attn = self.enc_attn(trg, enc, enc, src_mask)
-        trg = self.norm2(trg + self.drop(_t))
-        return self.norm3(trg + self.drop(self.ff(trg))), attn
+        _t, _ = self.self_attention(trg, trg, trg, trg_mask)
+        trg = self.self_attn_layer_norm(trg + self.dropout(_t))
+        _t, attn = self.encoder_attention(trg, enc, enc, src_mask)
+        trg = self.enc_attn_layer_norm(trg + self.dropout(_t))
+        return self.ff_layer_norm(trg + self.dropout(self.positionwise_feedforward(trg))), attn
 
 
 class _Encoder(nn.Module):
     def __init__(self, vocab, hid, layers, heads, pf, drop, device, max_len=100):
         super().__init__()
         self.device = device
-        self.tok_emb = nn.Embedding(vocab, hid)
-        self.pos_emb = nn.Embedding(max_len, hid)
+        self.tok_embedding = nn.Embedding(vocab, hid)
+        self.pos_embedding = nn.Embedding(max_len, hid)
         self.layers = nn.ModuleList([_EncLayer(hid, heads, pf, drop, device) for _ in range(layers)])
-        self.drop = nn.Dropout(drop)
+        self.dropout = nn.Dropout(drop)
         self.scale = torch.sqrt(torch.FloatTensor([hid])).to(device)
 
     def forward(self, src, mask):
         pos = torch.arange(0, src.shape[1]).unsqueeze(0).repeat(src.shape[0], 1).to(self.device)
-        src = self.drop(self.tok_emb(src) * self.scale + self.pos_emb(pos))
+        src = self.dropout(self.tok_embedding(src) * self.scale + self.pos_embedding(pos))
         for layer in self.layers:
             src = layer(src, mask)
         return src
@@ -139,16 +139,16 @@ class _Decoder(nn.Module):
     def __init__(self, vocab, hid, layers, heads, pf, drop, device, max_len=100):
         super().__init__()
         self.device = device
-        self.tok_emb = nn.Embedding(vocab, hid)
-        self.pos_emb = nn.Embedding(max_len, hid)
+        self.tok_embedding = nn.Embedding(vocab, hid)
+        self.pos_embedding = nn.Embedding(max_len, hid)
         self.layers = nn.ModuleList([_DecLayer(hid, heads, pf, drop, device) for _ in range(layers)])
         self.fc_out = nn.Linear(hid, vocab)
-        self.drop = nn.Dropout(drop)
+        self.dropout = nn.Dropout(drop)
         self.scale = torch.sqrt(torch.FloatTensor([hid])).to(device)
 
     def forward(self, trg, enc_src, trg_mask, src_mask):
         pos = torch.arange(0, trg.shape[1]).unsqueeze(0).repeat(trg.shape[0], 1).to(self.device)
-        trg = self.drop(self.tok_emb(trg) * self.scale + self.pos_emb(pos))
+        trg = self.dropout(self.tok_embedding(trg) * self.scale + self.pos_embedding(pos))
         for layer in self.layers:
             trg, attn = layer(trg, enc_src, trg_mask, src_mask)
         return self.fc_out(trg), attn

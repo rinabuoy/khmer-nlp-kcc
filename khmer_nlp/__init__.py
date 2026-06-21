@@ -17,7 +17,7 @@ from ._inference import (
 )
 from ._g2p import load_g2p, g2p_word, phoneme_cer as _phoneme_cer
 
-__version__ = "0.2.7"
+__version__ = "0.2.8"
 __all__ = ["KhmerNLP"]
 
 
