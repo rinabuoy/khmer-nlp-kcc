@@ -177,11 +177,20 @@ class _G2PModel(nn.Module):
 
 # ── Public helpers ─────────────────────────────────────────────────────────────
 
+_HF_REPO_ID = "rinabuoy/khmer-nlp-kcc"
+_G2P_FILENAME = "g2p_final_trans.pt"
+
+
 def load_g2p(path: Optional[str] = None, device: Optional[torch.device] = None) -> _G2PModel:
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if path is None:
-        path = str(Path(__file__).parent.parent / "g2p_final_trans.pt")
+        local = Path(__file__).parent.parent / _G2P_FILENAME
+        if local.exists():
+            path = str(local)
+        else:
+            from huggingface_hub import hf_hub_download
+            path = hf_hub_download(repo_id=_HF_REPO_ID, filename=_G2P_FILENAME, repo_type="model")
     enc = _Encoder(_INPUT_DIM, _HID_DIM, _N_LAYERS, _N_HEADS, _PF_DIM, _DROPOUT, device)
     dec = _Decoder(_INPUT_DIM, _HID_DIM, _N_LAYERS, _N_HEADS, _PF_DIM, _DROPOUT, device)
     model = _G2PModel(enc, dec, pad_idx=0, device=device).to(device)
