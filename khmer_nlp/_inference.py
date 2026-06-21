@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import torch
 import torch.nn.functional as F
 
-from ._labels import SEG_LABELS, POS_LABELS
+from ._labels import SEG_LABELS, POS_LABELS, NOVA_LABELS
 
 if TYPE_CHECKING:
     from transformers import AutoTokenizer
@@ -60,7 +60,10 @@ def _clean(tok: str) -> str:
     return tok.replace("▁", "").replace("Ġ", "") or tok
 
 
-def segment_words(text: str, model, tokenizer, device) -> list[str]:
+_SEG_SEP = {"I_PHRASE": "_", "I_COMP": "_", "I_DERIV": "_"}
+
+
+def segment_words(text: str, model, tokenizer, device, *, markers: bool = False) -> list[str]:
     pairs = [(d["token"], d["label"]) for d in predict_token_labels(text, "seg", SEG_LABELS, model, tokenizer, device)]
     words: list[str] = []
     current: list[str] = []
@@ -74,11 +77,13 @@ def segment_words(text: str, model, tokenizer, device) -> list[str]:
             if current:
                 words.append("".join(current))
             current = [_clean(token)]
+        elif markers and label in _SEG_SEP:
+            current.append(_SEG_SEP[label] + _clean(token))
         else:
             current.append(_clean(token))
     if current:
         words.append("".join(current))
-    return [w for w in words if w]
+    return ' '.join([w for w in words if w])
 
 
 def group_pos(text: str, model, tokenizer, device) -> list[dict]:
@@ -102,4 +107,28 @@ def group_pos(text: str, model, tokenizer, device) -> list[dict]:
             cur_chars.append(_clean(tok))
     if cur_chars:
         groups.append({"word": "".join(cur_chars), "label": cur_pos})
+    return groups
+
+
+def group_nova_pos(text: str, model, tokenizer, device) -> list[dict]:
+    seg_pairs = [(d["token"], d["label"]) for d in predict_token_labels(text, "seg", SEG_LABELS, model, tokenizer, device)]
+    nova_pairs = [(d["token"], d["label"]) for d in predict_token_labels(text, "nova", NOVA_LABELS, model, tokenizer, device)]
+    groups: list[dict] = []
+    cur_chars: list[str] = []
+    cur_label = None
+    for (tok, seg_label), (_, nova_label) in zip(seg_pairs, nova_pairs):
+        if seg_label == "SP":
+            if cur_chars:
+                groups.append({"word": "".join(cur_chars), "label": cur_label})
+                cur_chars, cur_label = [], None
+            continue
+        if seg_label == "B":
+            if cur_chars:
+                groups.append({"word": "".join(cur_chars), "label": cur_label})
+            cur_chars = [_clean(tok)]
+            cur_label = nova_label
+        else:
+            cur_chars.append(_clean(tok))
+    if cur_chars:
+        groups.append({"word": "".join(cur_chars), "label": cur_label})
     return groups
