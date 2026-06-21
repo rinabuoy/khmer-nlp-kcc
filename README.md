@@ -42,10 +42,10 @@ nlp.analyze("គាត់និយាយថា៖ការសិក្សាន�
 
 ## Grapheme-to-phoneme (G2P)
 
-The G2P model requires a separate checkpoint (`g2p_final_trans.pt`). Pass its path via `g2p_checkpoint_path`:
+The G2P checkpoint (`g2p_final_trans.pt`) is downloaded automatically from HuggingFace Hub on first use, just like the main model.
 
 ```python
-nlp = KhmerNLP(g2p_checkpoint_path="/path/to/g2p_final_trans.pt")
+nlp = KhmerNLP()
 
 # Phoneme sequence for a single word
 nlp.g2p("ខ្មែរ")
@@ -54,13 +54,19 @@ nlp.g2p("ខ្មែរ")
 # Phoneme CER between two Khmer words
 nlp.phoneme_cer("ខ្មែរ", "ខ្មែរភូមិ")
 # → {
-#     "word1": "ខ្មែរ",   "phones1": ["kh", "ae", ".", "m", "ae"],
+#     "word1": "ខ្មែរ",    "phones1": ["kh", "ae", ".", "m", "ae"],
 #     "word2": "ខ្មែរភូមិ", "phones2": ["kh", "ae", ".", "m", "ae", ".", "ph", "uu", "m", ".", "m", "ɨ"],
 #     "cer": 0.7
 #   }
 ```
 
 CER is computed at phoneme-token level (edit distance / number of phonemes in `word1`).
+
+To use a local checkpoint instead:
+
+```python
+nlp = KhmerNLP(g2p_checkpoint_path="/path/to/g2p_final_trans.pt")
+```
 
 ## Custom checkpoint
 
